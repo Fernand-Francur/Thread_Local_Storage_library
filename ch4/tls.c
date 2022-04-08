@@ -29,7 +29,7 @@ typedef struct thread_local_storage {
 } TLS;
 
 struct page {
-  unsigned int address;
+  unsigned long address;
   int ref_count;
 };
 
@@ -43,6 +43,7 @@ struct tid_tls_pair {
  */
 #define MAX_THREAD_COUNT 128
 #define PAGE_SIZE 4096
+#define INIT_REFERENCE 1
 
 static struct tid_tls_pair tid_tls_pairs[MAX_THREAD_COUNT];
 static int thread_count = 0;
@@ -93,23 +94,19 @@ int tls_create(unsigned int size) {
   }
   thread_count++;
   printf("thread count = %d\n", thread_count);
+  // page_count = 3; //Just testing...
   tid_tls_pairs[thread_count].tid = tid;
-
   tid_tls_pairs[thread_count].tls = calloc(1, sizeof(TLS));
   tid_tls_pairs[thread_count].tls->tid = tid;
   tid_tls_pairs[thread_count].tls->size = size;
   tid_tls_pairs[thread_count].tls->page_num = page_count;
   tid_tls_pairs[thread_count].tls->pages = calloc(page_count, sizeof(struct page *));
   for (int j = 0; j < page_count; j++) {
+    tid_tls_pairs[thread_count].tls->pages[j] = calloc(1, sizeof(struct page));
     tid_tls_pairs[thread_count].tls->pages[j]->address = mmap(NULL, page_size, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
-    
+    tid_tls_pairs[thread_count].tls->pages[j]->ref_count = INIT_REFERENCE;
+    printf("address = %lx ref_count = %d\n", tid_tls_pairs[thread_count].tls->pages[j]->address, tid_tls_pairs[thread_count].tls->pages[j]->ref_count);
   }
-
-
-
-
-
-
 	return 0;
 }
 
@@ -130,5 +127,42 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 
 int tls_clone(pthread_t tid)
 {
+  pthread_t my_tid = pthread_self();
+  bool tid_exists = false;
+  
+  int tls_reference;
+  if (thread_count == 0) {
+    perror("ERROR: TLS system not initialized");
+    return -1;
+  }
+  for (int i = 0; i < thread_count; i++) {
+    if (my_tid == tid_tls_pairs[i].tid) {
+      perror("ERROR: LSA for this thread is already created");
+      return -1;
+    }
+    if (tid == tid_tls_pairs[i].tid) {
+      tls_reference = i;
+      tid_exists = true;
+    }
+  }
+  if (tid_exists != true) {
+    perror("ERROR: LSA of target thread does not exist");
+    return -1;
+  }
+  thread_count++;
+  printf("thread count = %d\n", thread_count);
+  tid_tls_pairs[thread_count].tid = my_tid;
+  tid_tls_pairs[thread_count].tls = calloc(1, sizeof(TLS));
+  tid_tls_pairs[thread_count].tls->tid = my_tid;
+  tid_tls_pairs[thread_count].tls->size = tid_tls_pairs[tls_reference].tls->size;
+  tid_tls_pairs[thread_count].tls->page_num = tid_tls_pairs[tls_reference].tls->page_num;
+  tid_tls_pairs[thread_count].tls->pages = tid_tls_pairs[tls_reference].tls->pages;
+
+  for (int j = 0; j < tid_tls_pairs[thread_count].tls->page_num; j++) {
+    tid_tls_pairs[thread_count].tls->pages[j]->ref_count++;
+    printf("address = %lx ref_count = %d\n", tid_tls_pairs[thread_count].tls->pages[j]->address, tid_tls_pairs[thread_count].tls->pages[j]->ref_count);
+  }
+
+  
 	return 0;
 }
