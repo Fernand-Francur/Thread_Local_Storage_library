@@ -103,9 +103,12 @@ int tls_create(unsigned int size) {
   tid_tls_pairs[thread_count].tls->pages = calloc(page_count, sizeof(struct page *));
   for (int j = 0; j < page_count; j++) {
     tid_tls_pairs[thread_count].tls->pages[j] = calloc(1, sizeof(struct page));
-    tid_tls_pairs[thread_count].tls->pages[j]->address = mmap(NULL, page_size, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
+    tid_tls_pairs[thread_count].tls->pages[j]->address = (unsigned long) mmap(NULL, page_size, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
     tid_tls_pairs[thread_count].tls->pages[j]->ref_count = INIT_REFERENCE;
     printf("address = %lx ref_count = %d\n", tid_tls_pairs[thread_count].tls->pages[j]->address, tid_tls_pairs[thread_count].tls->pages[j]->ref_count);
+
+// void * src = (void*) (tid_tls_pairs[thread_count].tls->pages[j]->address + 4096);
+// printf("address = %p\n", src);
   }
 	return 0;
 }
@@ -117,11 +120,65 @@ int tls_destroy()
 
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
+  pthread_t tid = pthread_self();
+  bool tid_exists = false;
+  int tls_reference;
+  int page_size = getpagesize();
+  int curr_page = 0;
+  char *curr_dest;
+  unsigned long int length_in_page = 0;
+  unsigned long int dest_calc = 0;
+  // unsigned long int curr_dest;
+  if (length <= 0) {
+    perror("ERROR: Length must be a positive integer");
+    return -1;
+  }
+  if (thread_count == 0) {
+    perror("ERROR: TLS system not initialized");
+    return -1;
+  }
+  for (int i = 0; i < thread_count; i++) {
+    if (tid == tid_tls_pairs[i].tid) {
+      tls_reference = i;
+      tid_exists = true;
+    }
+  }
+  if (tid_exists != true) {
+    perror("ERROR: LSA of target thread does not exist");
+    return -1;
+  }
+  if (offset + length <= tid_tls_pairs[tls_reference].tls->size) {
+    perror("ERROR: Memory referenced out of size of LSA");
+    return -1;
+  }
+
+  while ((offset < page_size) != true) {
+    offset = offset - page_size;
+    curr_page++;
+  }
+  
+
+  void * src = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address + offset);
+  curr_dest = buffer;
+  length_in_page = page_size - offset;
+  while(length_in_page <= length) {
+    memcpy(curr_dest, src, length_in_page);
+
+    dest_calc = ((unsigned long int) curr_dest ) + length_in_page;
+    curr_dest = (char *) dest_calc;
+    length = length - length_in_page;
+    curr_page++;
+    length_in_page = page_size;
+    src = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address);
+  }
+  memcpy(curr_dest, src, length);
+
 	return 0;
 }
 
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
+  // pthread_t my_tid = pthread_self();
 	return 0;
 }
 
@@ -129,8 +186,8 @@ int tls_clone(pthread_t tid)
 {
   pthread_t my_tid = pthread_self();
   bool tid_exists = false;
-  
   int tls_reference;
+  
   if (thread_count == 0) {
     perror("ERROR: TLS system not initialized");
     return -1;
@@ -149,6 +206,7 @@ int tls_clone(pthread_t tid)
     perror("ERROR: LSA of target thread does not exist");
     return -1;
   }
+
   thread_count++;
   printf("thread count = %d\n", thread_count);
   tid_tls_pairs[thread_count].tid = my_tid;
@@ -163,6 +221,5 @@ int tls_clone(pthread_t tid)
     printf("address = %lx ref_count = %d\n", tid_tls_pairs[thread_count].tls->pages[j]->address, tid_tls_pairs[thread_count].tls->pages[j]->ref_count);
   }
 
-  
 	return 0;
 }
