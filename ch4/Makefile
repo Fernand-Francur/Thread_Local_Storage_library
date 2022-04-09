@@ -9,7 +9,10 @@ tls_test_1.o: tls_test_1.c tls.h
 tls_test_1: tls_test_1.o tls.o
 	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
 
-test_files=tls_test_1
+tls_test_2: tls_test_2.o tls.o
+	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
+
+test_files=tls_test_1 tls_test_2
 
 # Run the test programs
 check: $(test_files) 
