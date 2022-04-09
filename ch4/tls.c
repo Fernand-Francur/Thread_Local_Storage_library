@@ -147,7 +147,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     perror("ERROR: LSA of target thread does not exist");
     return -1;
   }
-  if (offset + length <= tid_tls_pairs[tls_reference].tls->size) {
+  if (offset + length > tid_tls_pairs[tls_reference].tls->size) {
     perror("ERROR: Memory referenced out of size of LSA");
     return -1;
   }
@@ -156,11 +156,12 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     offset = offset - page_size;
     curr_page++;
   }
-  
 
   void * src = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address + offset);
+
   curr_dest = buffer;
   length_in_page = page_size - offset;
+
   while(length_in_page <= length) {
     memcpy(curr_dest, src, length_in_page);
 
@@ -169,6 +170,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     length = length - length_in_page;
     curr_page++;
     length_in_page = page_size;
+    
     src = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address);
   }
   memcpy(curr_dest, src, length);
@@ -178,7 +180,84 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
-  // pthread_t my_tid = pthread_self();
+  pthread_t tid = pthread_self();
+  bool tid_exists = false;
+  int tls_reference;
+  int page_size = getpagesize();
+  int curr_page = 0;
+  char * src;
+  char * tmp_buff;
+  unsigned long int length_in_page = 0;
+  unsigned long int src_calc = 0;
+  // unsigned long int curr_dest;
+  if (length <= 0) {
+    perror("ERROR: Length must be a positive integer");
+    return -1;
+  }
+  if (thread_count == 0) {
+    perror("ERROR: TLS system not initialized");
+    return -1;
+  }
+  for (int i = 0; i < thread_count; i++) {
+    if (tid == tid_tls_pairs[i].tid) {
+      tls_reference = i;
+      tid_exists = true;
+      break;
+    }
+  }
+  if (tid_exists != true) {
+    perror("ERROR: LSA of target thread does not exist");
+    return -1;
+  }
+  if (offset + length > tid_tls_pairs[tls_reference].tls->size) {
+    perror("ERROR: Memory referenced out of size of LSA");
+    return -1;
+  }
+
+ while ((offset < page_size) != true) {
+    offset = offset - page_size;
+    curr_page++;
+  }
+  
+  tmp_buff = calloc(length, 1);
+  memcpy(tmp_buff, buffer, length);
+
+  if (tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count != 1) {
+    struct page * new_page = calloc(1, sizeof(struct page));
+    new_page->address = (unsigned long) mmap(NULL, page_size, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
+    memcpy((void *) new_page->address, (void *) tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size);
+    new_page->ref_count = 1;
+    tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count--;
+    tid_tls_pairs[tls_reference].tls->pages[curr_page] = new_page;
+  }
+  void * curr_dest = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address + offset);
+  
+  src = tmp_buff;
+  length_in_page = page_size - offset;
+  while(length_in_page <= length) {
+    memcpy(curr_dest, src, length_in_page);
+
+    src_calc = ((unsigned long int) src ) + length_in_page;
+    src = (char *) src_calc;
+    length = length - length_in_page;
+    curr_page++;
+    length_in_page = page_size;
+
+    if (tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count != 1) {
+      struct page * new_page = calloc(1, sizeof(struct page));
+      new_page->address = (unsigned long) mmap(NULL, page_size, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
+      memcpy((void *) new_page->address, (void *) tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size);
+      new_page->ref_count = 1;
+      tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count--;
+      tid_tls_pairs[tls_reference].tls->pages[curr_page] = new_page;
+    }
+
+    curr_dest = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address);
+  }
+  memcpy(curr_dest, src, length);
+
+
+
 	return 0;
 }
 
