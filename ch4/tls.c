@@ -165,6 +165,13 @@ int tls_destroy()
 	return 0;
 }
 
+
+
+
+
+
+
+
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
 
@@ -249,6 +256,12 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 	return 0;
 }
 
+
+
+
+
+
+
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
 
@@ -312,7 +325,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 
     // old page is open to read
 
-    memcpy((void *) new_page->address, (void *) tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size-1);
+    memcpy((void *) new_page->address, (void *) tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size);
     
     if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
       perror("ERROR: Could not change memory protections of page");
@@ -324,7 +337,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     new_page->ref_count = 1;
     tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count--;
     tid_tls_pairs[tls_reference].tls->pages[curr_page] = new_page;
-
+    printf("new address = %lx ref_count = %d\n", tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count);
     // new ref set to 1, old decremented, current page set to new
   }
 
@@ -358,7 +371,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
         return -1;
       }
 
-      memcpy((void *) new_page->address, (void *) tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size-1);
+      memcpy((void *) new_page->address, (void *) tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size);
     
       if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
         perror("ERROR: Could not change memory protections of page");
@@ -381,10 +394,15 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     perror("ERROR: Could not change memory protections of page");
     return -1;
   }
-   printf("Thread count = %d\n\n", thread_count);
+   //printf("Thread count = %d\n\n", thread_count);
   printf("Written to thread %ld\n\n", tid_tls_pairs[tls_reference].tid);
 	return 0;
 }
+
+
+
+
+
 
 int tls_clone(pthread_t tid)
 {
@@ -421,11 +439,12 @@ int tls_clone(pthread_t tid)
   tid_tls_pairs[thread_count].tls->tid = my_tid;
   tid_tls_pairs[thread_count].tls->size = tid_tls_pairs[tls_reference].tls->size;
   tid_tls_pairs[thread_count].tls->page_num = tid_tls_pairs[tls_reference].tls->page_num;
-  tid_tls_pairs[thread_count].tls->pages = tid_tls_pairs[tls_reference].tls->pages;
+  tid_tls_pairs[thread_count].tls->pages = calloc(tid_tls_pairs[thread_count].tls->page_num, sizeof(struct page *));
 
   for (int j = 0; j < tid_tls_pairs[thread_count].tls->page_num; j++) {
+    tid_tls_pairs[thread_count].tls->pages[j] = tid_tls_pairs[tls_reference].tls->pages[j];
     tid_tls_pairs[thread_count].tls->pages[j]->ref_count++;
-    printf("address = %lx ref_count = %d\n", tid_tls_pairs[thread_count].tls->pages[j]->address, tid_tls_pairs[thread_count].tls->pages[j]->ref_count);
+    printf("address1 = %lx address2 = %lx ref_count = %d\n", tid_tls_pairs[thread_count].tls->pages[j]->address,tid_tls_pairs[tls_reference].tls->pages[j]->address, tid_tls_pairs[thread_count].tls->pages[j]->ref_count);
   }
   printf("LSA for thread %ld cloned\n\n", tid_tls_pairs[thread_count].tid);
   thread_count++;
