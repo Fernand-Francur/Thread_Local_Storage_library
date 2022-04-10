@@ -219,7 +219,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   curr_dest = buffer;
   length_in_page = page_size - offset;
 
-  while(length_in_page <= length) {
+  while(length_in_page < length) {
     memcpy(curr_dest, src, length_in_page);
 
     if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
@@ -336,7 +336,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
   
   src = tmp_buff;
   length_in_page = page_size - offset;
-  while(length_in_page <= length) {
+  while(length_in_page < length) {
     memcpy(curr_dest, src, length_in_page);
     if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
       perror("ERROR: Could not change memory protections of page");

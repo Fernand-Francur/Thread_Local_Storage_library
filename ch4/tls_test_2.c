@@ -3,7 +3,7 @@
 #include "tls.h"
 
 /* How many threads (aside from main) to create */
-#define THREAD_CNT 5
+#define THREAD_CNT 1
 
 /* Each counter goes up to a multiple of this value. If your test is too fast
  * use a bigger number. Too slow? Use a smaller number. See the comment about
@@ -26,7 +26,7 @@ void *count(void *arg)
     if (create == 0)
     {
         char buffer[20];
-        strcpy(buffer, "Hello");
+        strcpy(buffer, "");
         int write = tls_write(0, 20, buffer);
 
         if (write == 0)
