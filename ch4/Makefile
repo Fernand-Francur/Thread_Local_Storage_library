@@ -18,7 +18,13 @@ tls_test_4: tls_test_4.o tls.o
 clone_test: clone_test.o tls.o
 	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
 
-test_files=tls_test_1 tls_test_2 clone_test tls_test_4 
+test_many: test_many.o tls.o
+	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
+
+test_more: test_more.o tls.o
+	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
+
+test_files=tls_test_1 tls_test_2 clone_test tls_test_4 test_more
 
 # Run the test programs
 check: $(test_files) 

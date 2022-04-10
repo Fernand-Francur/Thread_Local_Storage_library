@@ -81,7 +81,7 @@ void * basic_write_read()
     /*write/read a basic string with no offset*/
     TEST_ASSERT(tls_write(0, strlen(data), data) == 0);
     TEST_ASSERT(tls_read(0, strlen(data), return_dat) == 0);
-    TEST_ASSERT(strcmp(data, return_dat) == 0);
+    TEST_ASSERT(strncmp(data, return_dat, strlen(data)) == 0);
     
     free(return_dat);
     /*write/read with an offset*/
@@ -91,7 +91,7 @@ void * basic_write_read()
     
     TEST_ASSERT(tls_write(500, strlen(data), data) == 0);
     TEST_ASSERT(tls_read(500, strlen(data), return_dat) == 0);
-    TEST_ASSERT(strcmp(data, return_dat) == 0);
+    TEST_ASSERT(strncmp(data, return_dat, strlen(data)) == 0);
     
     free(return_dat);
     

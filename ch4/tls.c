@@ -44,21 +44,69 @@ struct tid_tls_pair {
 
 static struct tid_tls_pair tid_tls_pairs[MAX_THREAD_COUNT];
 static unsigned int thread_count = 0;
+static pthread_mutex_t lock;
+
+void *mem_cpy(void *dest, const void *src, size_t n) {
+    size_t i;
+    char * new_start = (char *) src;
+    char * new_dest = (char *) dest;
+    for (i = n; i-- > 0;) {
+        new_dest[i] = new_start[i];
+    }
+    return new_dest;
+}
 
 void tls_handle_page_fault(int sig, siginfo_t *si, void *context) {
+   pthread_mutex_lock(&lock);
+  // pthread_exit(NULL);
   int page_size = getpagesize();
-  printf("Page size = %d\n", page_size);
+  //printf("Page size = %d\n", page_size);
 
-  //int p_fault = ((unsigned int) si->si_addr) & ~(page_size -1);
+
+  unsigned long int p_fault = ((unsigned long int) si->si_addr) & ~(page_size -1);
+  //int tls_reference;
+  pthread_t tid = pthread_self();
+  TLS * curr;
+  //bool tls_exists = false;
+  bool addr_in_thread = false;
+  void * retval = (void *)1;
+  for (int i = 0; i < MAX_THREAD_COUNT; i++) {
+
+    // printf("tid = %ld\n", tid_tls_pairs[i].tid);
+    if ( tid_tls_pairs[i].tid == tid) {
+      curr = tid_tls_pairs[i].tls;
+      //tls_reference = i;
+      //tls_exists = true;
+      break;
+    }
+  }
+  //if (tls_exists) {
+    for (int j = 0; j < curr->page_num; j++) {
+      if (tid_tls_pairs[thread_count].tls->pages[j]->address == p_fault) {
+        addr_in_thread = true;
+        break;
+      }
+    }
+  //} 
+
+  if(addr_in_thread == false) {
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGBUS, SIG_DFL);
+     pthread_mutex_unlock(&lock);
+    raise(sig);
+  }
+   pthread_mutex_unlock(&lock);
+  pthread_exit(retval);
+
 }
 
 void tls_init() {
   struct sigaction sa;
-  int page_size = getpagesize();
-  printf("Page size = %d\n", page_size);
+  //int page_size = getpagesize();
+  //printf("Page size = %d\n", page_size);
 
   sa.sa_flags = SA_SIGINFO;
-  //sa.sa_sigaction = tls_handle_page_fault;
+  sa.sa_sigaction = tls_handle_page_fault;
   sigaction(SIGBUS, &sa, NULL);
   sigaction(SIGSEGV, &sa, NULL); 
 }
@@ -68,26 +116,29 @@ void tls_init() {
 // This function creates a LSA for a thread
 
 int tls_create(unsigned int size) {
-  printf("\nCreate has started\n");
+  pthread_mutex_lock(&lock);
+  //printf("\nCreate has started\n");
   pthread_t tid = pthread_self();
   int page_size = getpagesize();
   unsigned int page_count = (size + (page_size-1))/page_size;
-  printf("page count = %d\n", page_count);
-  printf("page size = %d\n", page_size);
+  //printf("page count = %d\n", page_count);
+  //printf("page size = %d\n", page_size);
   if (thread_count == 0) {
     tls_init();
   }
   if (size < 0) {
     perror("ERROR: Size is less than zero");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
   for (int i = 0; i < thread_count; i++) {
     if (tid== tid_tls_pairs[i].tid) {
       perror("ERROR: LSA for this thread is already created");
+      pthread_mutex_unlock(&lock);
       return -1;
     }
   }
-  printf("thread count = %d\n", thread_count);
+  //printf("thread count = %d\n", thread_count);
 
   tid_tls_pairs[thread_count].tid = tid;
   tid_tls_pairs[thread_count].tls = calloc(1, sizeof(TLS));
@@ -99,12 +150,13 @@ int tls_create(unsigned int size) {
     tid_tls_pairs[thread_count].tls->pages[j] = calloc(1, sizeof(struct page));
     tid_tls_pairs[thread_count].tls->pages[j]->address = (unsigned long) mmap(NULL, page_size, PROT_NONE, MAP_ANON | MAP_PRIVATE, 0, 0);
     tid_tls_pairs[thread_count].tls->pages[j]->ref_count = INIT_REFERENCE;
-    printf("address = %lx ref_count = %d\n", tid_tls_pairs[thread_count].tls->pages[j]->address, tid_tls_pairs[thread_count].tls->pages[j]->ref_count);
+    //printf("address = %lx ref_count = %d\n", tid_tls_pairs[thread_count].tls->pages[j]->address, tid_tls_pairs[thread_count].tls->pages[j]->ref_count);
 
   }
-  printf("LSA for thread %ld created\n\n", tid_tls_pairs[thread_count].tid);
+  //printf("LSA for thread %ld created\n\n", tid_tls_pairs[thread_count].tid);
   thread_count++;
-  printf("Thread count = %d\n\n", thread_count);
+  pthread_mutex_unlock(&lock);
+  //printf("Thread count = %d\n\n", thread_count);
 	return 0;
 }
 
@@ -113,19 +165,21 @@ int tls_create(unsigned int size) {
 
 int tls_destroy()
 {
-  printf("Thread count = %d\n\n", thread_count);
+  pthread_mutex_lock(&lock);
+  //printf("Thread count = %d\n\n", thread_count);
   int page_size = getpagesize();
   pthread_t tid = pthread_self();
   int tls_reference;
   bool tid_exists = false;
-  printf("\nDestroy has started for thread %ld\n", tid);
+  //printf("\nDestroy has started for thread %ld\n", tid);
   if (thread_count == 0) {
     perror("ERROR: TLS system not initialized");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
   for (int i = 0; i < thread_count; i++) {
 
-    printf("tid = %ld\n", tid_tls_pairs[i].tid);
+    //printf("tid = %ld\n", tid_tls_pairs[i].tid);
     if (tid == tid_tls_pairs[i].tid) {
       tls_reference = i;
       tid_exists = true;
@@ -134,6 +188,7 @@ int tls_destroy()
   }
     if (tid_exists != true) {
     perror("ERROR: LSA of target thread does not exist");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
 
@@ -159,8 +214,9 @@ int tls_destroy()
   tid_tls_pairs[MAX_THREAD_COUNT].tls = NULL;
  
   thread_count = thread_count - 1;
-  printf("Thread %ld destroyed\n", pthread_self());
-  printf("Thread count = %d\n\n", thread_count);
+  pthread_mutex_unlock(&lock);
+  //printf("Thread %ld destroyed\n", pthread_self());
+  //printf("Thread count = %d\n\n", thread_count);
 
 	return 0;
 }
@@ -174,7 +230,7 @@ int tls_destroy()
 
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
-
+  pthread_mutex_lock(&lock);
   pthread_t tid = pthread_self();
   bool tid_exists = false;
   int tls_reference;
@@ -184,18 +240,20 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   unsigned long int length_in_page = 0;
   unsigned long int dest_calc = 0;
 
-    printf("\nRead has started of thread %ld\n", tid);
+    //printf("\nRead has started of thread %ld\n", tid);
 
   if (length <= 0) {
     perror("ERROR: Length must be a positive integer");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
   if (thread_count == 0) {
     perror("ERROR: TLS system not initialized");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
   for (int i = 0; i < thread_count; i++) {
-    printf("tid = %ld\n", tid_tls_pairs[i].tid);
+    //printf("tid = %ld\n", tid_tls_pairs[i].tid);
     if (tid == tid_tls_pairs[i].tid) {
       
       tls_reference = i;
@@ -204,10 +262,12 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   }
   if (tid_exists != true) {
     perror("ERROR: LSA of target thread does not exist");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
   if (offset + length > tid_tls_pairs[tls_reference].tls->size) {
     perror("ERROR: Memory referenced out of size of LSA");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
 
@@ -217,20 +277,23 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
   }
 
   void * src = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address + offset);
-  if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_READ) != 0) {
-    perror("ERROR: Could not change memory protections of page");
-    return -1;
-  }
 
 
   curr_dest = buffer;
   length_in_page = page_size - offset;
+
+  if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_READ) != 0) {
+    perror("ERROR: Could not change memory protections of page");
+    pthread_mutex_unlock(&lock);
+    return -1;
+  }
 
   while(length_in_page < length) {
     memcpy(curr_dest, src, length_in_page);
 
     if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
       perror("ERROR: Could not change memory protections of page");
+      pthread_mutex_unlock(&lock);
       return -1;
     }
 
@@ -243,16 +306,19 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
     src = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address);
     if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_READ) != 0) {
       perror("ERROR: Could not change memory protections of page");
+      pthread_mutex_unlock(&lock);
       return -1;
     }
   }
   memcpy(curr_dest, src, length);
   if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
     perror("ERROR: Could not change memory protections of page");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
-   printf("Thread count = %d\n\n", thread_count);
-  printf("Read complete\n\n");
+  pthread_mutex_unlock(&lock);
+   //printf("Thread count = %d\n\n", thread_count);
+  //printf("Read complete\n\n");
 	return 0;
 }
 
@@ -264,7 +330,7 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 
 int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 {
-
+  pthread_mutex_lock(&lock);
   pthread_t tid = pthread_self();
   bool tid_exists = false;
   int tls_reference;
@@ -275,18 +341,20 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
   unsigned long int length_in_page = 0;
   unsigned long int src_calc = 0;
 
-  printf("\nWrite has started for thread %ld\n", tid);
+  //printf("\nWrite has started for thread %ld\n", tid);
   // unsigned long int curr_dest;
   if (length <= 0) {
     perror("ERROR: Length must be a positive integer");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
   if (thread_count == 0) {
     perror("ERROR: TLS system not initialized");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
   for (int i = 0; i < thread_count; i++) {
-    printf("tid = %ld\n", tid_tls_pairs[i].tid);
+    //printf("tid = %ld\n", tid_tls_pairs[i].tid);
     if (tid == tid_tls_pairs[i].tid) {
       tls_reference = i;
       tid_exists = true;
@@ -295,10 +363,12 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
   }
   if (tid_exists != true) {
     perror("ERROR: LSA of target thread does not exist");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
   if (offset + length > tid_tls_pairs[tls_reference].tls->size) {
     perror("ERROR: Memory referenced out of size of LSA");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
 
@@ -320,6 +390,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 
     if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_READ) != 0) {
       perror("ERROR: Could not change memory protections of page");
+      pthread_mutex_unlock(&lock);
       return -1;
     }
 
@@ -329,6 +400,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     
     if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
       perror("ERROR: Could not change memory protections of page");
+      pthread_mutex_unlock(&lock);
       return -1;
     }
 
@@ -337,22 +409,32 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     new_page->ref_count = 1;
     tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count--;
     tid_tls_pairs[tls_reference].tls->pages[curr_page] = new_page;
-    printf("new address = %lx ref_count = %d\n", tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count);
+    //printf("new address = %lx ref_count = %d\n", tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count);
+    
+    if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
+      perror("ERROR: Could not change memory protections of page");
+      pthread_mutex_unlock(&lock);
+      return -1;
+    }
     // new ref set to 1, old decremented, current page set to new
   }
 
   void * curr_dest = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address + offset);
-  if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_WRITE) != 0) {
-    perror("ERROR: Could not change memory protections of page");
-    return -1;
-  }
+
   
   src = tmp_buff;
   length_in_page = page_size - offset;
+  if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_WRITE) != 0) {
+    perror("ERROR: Could not change memory protections of page");
+    pthread_mutex_unlock(&lock);
+    return -1;
+  }
+
   while(length_in_page < length) {
     memcpy(curr_dest, src, length_in_page);
     if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
       perror("ERROR: Could not change memory protections of page");
+      pthread_mutex_unlock(&lock);
       return -1;
     }
 
@@ -368,6 +450,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     
       if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_READ) != 0) {
         perror("ERROR: Could not change memory protections of page");
+        pthread_mutex_unlock(&lock);
         return -1;
       }
 
@@ -375,27 +458,36 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     
       if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
         perror("ERROR: Could not change memory protections of page");
+        pthread_mutex_unlock(&lock);
         return -1;
       }
 
       new_page->ref_count = 1;
       tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count--;
       tid_tls_pairs[tls_reference].tls->pages[curr_page] = new_page;
+      if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
+        perror("ERROR: Could not change memory protections of page");
+        pthread_mutex_unlock(&lock);
+        return -1;
+      }
     }
 
     curr_dest = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address);
     if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_WRITE) != 0) {
       perror("ERROR: Could not change memory protections of page");
+      pthread_mutex_unlock(&lock);
       return -1;
     }
   }
   memcpy(curr_dest, src, length);
   if (mprotect((void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address), page_size, PROT_NONE) != 0) {
     perror("ERROR: Could not change memory protections of page");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
    //printf("Thread count = %d\n\n", thread_count);
-  printf("Written to thread %ld\n\n", tid_tls_pairs[tls_reference].tid);
+  //printf("Written to thread %ld\n\n", tid_tls_pairs[tls_reference].tid);
+  pthread_mutex_unlock(&lock);
 	return 0;
 }
 
@@ -406,20 +498,23 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 
 int tls_clone(pthread_t tid)
 {
+  pthread_mutex_lock(&lock);
   pthread_t my_tid = pthread_self();
   bool tid_exists = false;
   int tls_reference;
   
-  printf("\nClone has started for thread %ld\n", tid);
+  //printf("\nClone has started for thread %ld\n", tid);
 
   if (thread_count == 0) {
     perror("ERROR: TLS system not initialized");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
   for (int i = 0; i < thread_count; i++) {
-    printf("tid = %ld\n", tid_tls_pairs[i].tid);
+    //printf("tid = %ld\n", tid_tls_pairs[i].tid);
     if (my_tid == tid_tls_pairs[i].tid) {
       perror("ERROR: LSA for this thread is already created");
+      pthread_mutex_unlock(&lock);
       return -1;
     }
     if (tid == tid_tls_pairs[i].tid) {
@@ -429,11 +524,12 @@ int tls_clone(pthread_t tid)
   }
   if (tid_exists != true) {
     perror("ERROR: LSA of target thread does not exist");
+    pthread_mutex_unlock(&lock);
     return -1;
   }
 
 
-  printf("thread count = %d\n", thread_count);
+  //printf("thread count = %d\n", thread_count);
   tid_tls_pairs[thread_count].tid = my_tid;
   tid_tls_pairs[thread_count].tls = calloc(1, sizeof(TLS));
   tid_tls_pairs[thread_count].tls->tid = my_tid;
@@ -444,10 +540,11 @@ int tls_clone(pthread_t tid)
   for (int j = 0; j < tid_tls_pairs[thread_count].tls->page_num; j++) {
     tid_tls_pairs[thread_count].tls->pages[j] = tid_tls_pairs[tls_reference].tls->pages[j];
     tid_tls_pairs[thread_count].tls->pages[j]->ref_count++;
-    printf("address1 = %lx address2 = %lx ref_count = %d\n", tid_tls_pairs[thread_count].tls->pages[j]->address,tid_tls_pairs[tls_reference].tls->pages[j]->address, tid_tls_pairs[thread_count].tls->pages[j]->ref_count);
+    // printf("address1 = %lx address2 = %lx ref_count = %d\n", tid_tls_pairs[thread_count].tls->pages[j]->address,tid_tls_pairs[tls_reference].tls->pages[j]->address, tid_tls_pairs[thread_count].tls->pages[j]->ref_count);
   }
-  printf("LSA for thread %ld cloned\n\n", tid_tls_pairs[thread_count].tid);
+  //printf("LSA for thread %ld cloned\n\n", tid_tls_pairs[thread_count].tid);
   thread_count++;
-    printf("Thread count = %d\n\n", thread_count);
+  pthread_mutex_unlock(&lock);
+    //printf("Thread count = %d\n\n", thread_count);
 	return 0;
 }
