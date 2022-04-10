@@ -3,13 +3,13 @@
 #include "tls.h"
 
 /* How many threads (aside from main) to create */
-#define THREAD_CNT 1
+#define THREAD_CNT 5
 
 /* Each counter goes up to a multiple of this value. If your test is too fast
  * use a bigger number. Too slow? Use a smaller number. See the comment about
  * sleeping in count() to avoid this size-tuning issue.
  */
-#define COUNTER_FACTOR 10000000
+#define COUNTER_FACTOR 1000000
 
 pthread_t threads[THREAD_CNT];
 
@@ -45,7 +45,7 @@ void *count(void *arg)
 
     int i = 0;
 
-    while (1)
+    while (i != 47 * COUNTER_FACTOR)
     {
         i++;
 
@@ -60,18 +60,19 @@ void *count(void *arg)
 
                 char buffer[20];
                 strcpy(buffer, "write after clone");
-                int write = tls_write(0, 20, buffer);
+                int offset = 40;
+                int write = tls_write(offset, 20, buffer);
 
                 if (write == 0)
                 {
                     printf("Write success in thread after being cloned\n");
 
-                    char read_buf2[20];
-                    int read = tls_read(0, 20, read_buf2);
+                    char read_buf2[60];
+                    int read = tls_read(44, 10, read_buf2);
 
                     if (read == 0)
                     {
-                        printf("Read success: %s, %ld\n", read_buf2, pthread_self());
+                        printf("Should be length 3 Read success: %s, %ld\n", read_buf2, pthread_self());
                     }
                 }
             }
@@ -82,6 +83,8 @@ void *count(void *arg)
             printf("Thread: %ld\n", pthread_self());
         }
     }
+    tls_destroy();
+    return 0;
 }
 
 int main(int argc, char **argv) {
@@ -92,8 +95,9 @@ int main(int argc, char **argv) {
 
     int j = 0;
 
-    while (1)
+    while (j != 50 * COUNTER_FACTOR)
     {
+
         j++;
 
         if (j == 5 * COUNTER_FACTOR)
@@ -128,14 +132,14 @@ int main(int argc, char **argv) {
         {
             char buffer[20];
             strcpy(buffer, "Clone Write");
-            int write = tls_write(0, 20, buffer);
+            int write = tls_write(20, 20, buffer);
 
             if (write == 0)
             {
                 printf("Clone Write success\n");
 
-                char read_buf2[20];
-                int read = tls_read(0, 20, read_buf2);
+                char read_buf2[40];
+                int read = tls_read(20, 40, read_buf2);
 
                 if (read == 0)
                 {

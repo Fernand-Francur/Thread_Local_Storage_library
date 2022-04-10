@@ -14,6 +14,7 @@ int main() {
   int p = tls_create(10);
   printf("p value = %d\n", p);
   int t = tls_destroy();
+  printf("t value = %d\n", t);
 
   return 0;
 }

@@ -1,4 +1,4 @@
-override CFLAGS := -Wall -std=gnu99 -pedantic -O0 -g -pthread $(CFLAGS)
+override CFLAGS := -Wall -Werror -std=gnu99 -pedantic -O0 -g -pthread $(CFLAGS)
 #-Wall -Werror
 override LDLIBS := -pthread $(LDLIBS)
 
