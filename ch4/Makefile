@@ -1,4 +1,4 @@
-override CFLAGS := -Wall  -std=gnu99 -pedantic -O0 -g -pthread $(CFLAGS)
+override CFLAGS := -Wall -Werror -std=gnu99 -pedantic -O0 -g -pthread $(CFLAGS)
 #-Wall -Werror
 override LDLIBS := -pthread $(LDLIBS)
 
@@ -6,8 +6,8 @@ tls.o: tls.c
 
 tls_test_1.o: tls_test_1.c tls.h
 
-tls_test_1: tls_test_1.o tls.o
-	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
+#tls_test_1: tls_test_1.o tls.o
+#	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
 
 tls_test_2: tls_test_2.o tls.o
 	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
@@ -24,7 +24,7 @@ test_many: test_many.o tls.o
 test_more: test_more.o tls.o
 	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
 
-test_files=tls_test_1 tls_test_2 clone_test tls_test_4 test_more
+test_files=tls_test_2 clone_test tls_test_4 test_more
 
 # Run the test programs
 check: $(test_files) 

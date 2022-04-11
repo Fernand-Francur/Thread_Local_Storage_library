@@ -71,7 +71,7 @@ void *count(void *arg)
         }
 
         if (i == 12 * COUNTER_FACTOR) {
-            char one[1];
+            char one[2];
             strcpy(one, "E");
             int write2 = tls_write(4096, 1, one);
 
@@ -170,7 +170,7 @@ int main(int argc, char **argv) {
                 // }
 
             }
-                 char one[1];
+                 char one[2];
             strcpy(one, "B");
             int write2 = tls_write(4096, 1, one);
 

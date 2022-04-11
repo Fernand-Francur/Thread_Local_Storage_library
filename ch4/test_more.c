@@ -46,6 +46,7 @@ void *count(void *arg)
         i++;
     }
     tls_destroy();
+    return NULL;
 }
 
 /*
