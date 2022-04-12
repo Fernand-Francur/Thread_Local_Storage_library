@@ -173,8 +173,6 @@ int tls_create(unsigned int size) {
   pthread_mutex_unlock(&lock);
 	return 0;
 }
-
-
 // This function destroys a thread LSA
 
 int tls_destroy()
@@ -231,12 +229,6 @@ int tls_destroy()
 }
 
 
-
-
-
-
-
-
 int tls_read(unsigned int offset, unsigned int length, char *buffer)
 {
   pthread_mutex_lock(&lock);
@@ -284,10 +276,8 @@ int tls_read(unsigned int offset, unsigned int length, char *buffer)
 
   void * src = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address + offset);
 
-
   curr_dest = buffer;
   length_in_page = page_size - offset;
-
 
   protect_read((void *)tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size);
 
@@ -356,7 +346,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
     return -1;
   }
 
- while ((offset < page_size) != true) {
+  while ((offset < page_size) != true) {
     offset = offset - page_size;
     curr_page++;
   }
@@ -369,17 +359,12 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
   if (tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count != 1) {
     struct page * new_page = calloc(1, sizeof(struct page));
     new_page->address = (unsigned long) mmap(NULL, page_size, PROT_WRITE, MAP_ANON | MAP_PRIVATE, 0, 0);
-    
     // new page is alloced
-
     protect_read((void *)tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size);
-
     // old page is open to read
-
     memcpy((void *) new_page->address, (void *) tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size);
     
     protect_page((void *)tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size);
-
     // old page copied to new and old is locked
     protect_page((void *)new_page->address, page_size);
 
@@ -393,7 +378,6 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
 
   void * curr_dest = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address + offset);
 
-  
   src = tmp_buff;
   length_in_page = page_size - offset;
   protect_write((void *)tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size);
@@ -422,7 +406,6 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
       tid_tls_pairs[tls_reference].tls->pages[curr_page]->ref_count--;
       tid_tls_pairs[tls_reference].tls->pages[curr_page] = new_page;
       protect_page((void *)tid_tls_pairs[tls_reference].tls->pages[curr_page]->address, page_size);
-      
     }
 
     curr_dest = (void *) (tid_tls_pairs[tls_reference].tls->pages[curr_page]->address);
@@ -433,6 +416,7 @@ int tls_write(unsigned int offset, unsigned int length, const char *buffer)
   for (int j = 0; j < tid_tls_pairs[tls_reference].tls->page_num; j++) {
      protect_page((void *)tid_tls_pairs[tls_reference].tls->pages[j]->address, page_size);
   }
+  free(tmp_buff);
   pthread_mutex_unlock(&lock);
 	return 0;
 }
